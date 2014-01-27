@@ -1,3 +1,4 @@
+//http://hi.baidu.com/ssyuan/item/128bc7d624a77a876dce3fc5
 package net.lnmcc;
 
 import java.io.IOException;
@@ -15,7 +16,6 @@ public class RTSPClient extends Thread implements IEvent {
 	private static final String RTSP_OK = "RTSP/1.0 200 OK";
 
 	private final InetSocketAddress remoteAddress;
-	private final InetSocketAddress localAddress;
 
 	private SocketChannel socketChannel;
 
@@ -25,7 +25,7 @@ public class RTSPClient extends Thread implements IEvent {
 	private static final int BUFFER_SIZE = 8129;
 
 	private Selector selector;
-	private String address;
+	private String rtspAddress;
 	private Status sysStatus;
 	private String sessionId;
 
@@ -38,11 +38,9 @@ public class RTSPClient extends Thread implements IEvent {
 		init, options, describe, setup, play, pause, teardown, exit
 	}
 
-	public RTSPClient(InetSocketAddress remoteAddress,
-			InetSocketAddress localAddress, String address) {
+	public RTSPClient(InetSocketAddress remoteAddress, String rtspAddress) {
 		this.remoteAddress = remoteAddress;
-		this.localAddress = localAddress;
-		this.address = address;
+		this.rtspAddress = rtspAddress;
 
 		sendBuf = ByteBuffer.allocateDirect(BUFFER_SIZE);
 		receiveBuf = ByteBuffer.allocateDirect(BUFFER_SIZE);
@@ -56,6 +54,7 @@ public class RTSPClient extends Thread implements IEvent {
 		}
 
 		startup();
+		
 		sysStatus = Status.init;
 		shutdown = new AtomicBoolean(false);
 		isSent = false;
@@ -64,18 +63,12 @@ public class RTSPClient extends Thread implements IEvent {
 	public void startup() {
 		try {
 			socketChannel = SocketChannel.open();
-			socketChannel.socket().setSoTimeout(30000);
+			socketChannel.socket().setSoTimeout(50000);
 			socketChannel.configureBlocking(false);
-			socketChannel.socket().bind(localAddress);
-
-			if (socketChannel.connect(remoteAddress)) {
-				System.out.println("Begin to connect: " + remoteAddress);
-			}
-
+			socketChannel.socket().bind(null);
+			socketChannel.connect(remoteAddress);
 			socketChannel.register(selector, SelectionKey.OP_CONNECT
 					| SelectionKey.OP_READ | SelectionKey.OP_WRITE, this);
-
-			System.out.println("Open succeed");
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -126,7 +119,7 @@ public class RTSPClient extends Thread implements IEvent {
 						receiveBuf.get(tmp);
 						return tmp;
 					} else {
-						System.out.println("Receive empty data");
+						System.err.println("Receive empty data from server");
 						return null;
 					}
 				}
@@ -134,7 +127,7 @@ public class RTSPClient extends Thread implements IEvent {
 				e.printStackTrace();
 			}
 		} else {
-			System.out.println("Not Connected");
+			System.err.println("Client not Connected");
 		}
 		return null;
 	}
@@ -146,6 +139,7 @@ public class RTSPClient extends Thread implements IEvent {
 			if (selector == null) {
 				return;
 			}
+			Thread.sleep(1000);
 			n = selector.select(1000);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -168,12 +162,9 @@ public class RTSPClient extends Thread implements IEvent {
 						handler.connect(sk);
 					} else if (sk.isReadable()) {
 						handler.read(sk);
-					} else {
-						System.out.println("Unknown selectedKeys");
 					}
 				} catch (IOException e) {
 					e.printStackTrace();
-					handler.error(e);
 					sk.cancel();
 				}
 
@@ -186,14 +177,14 @@ public class RTSPClient extends Thread implements IEvent {
 		if (isConnected()) {
 			try {
 				socketChannel.close();
-				System.out.println("closed");
+				System.out.println("Client Shutdown");
 			} catch (IOException e) {
 				e.printStackTrace();
 			} finally {
 				socketChannel = null;
 			}
 		} else {
-			System.out.println("Alreadly disconected");
+			System.err.println("Client not connected");
 		}
 	}
 
@@ -214,7 +205,7 @@ public class RTSPClient extends Thread implements IEvent {
 						break;
 					case setup:
 						if (sessionId == null || sessionId.length() <= 0) {
-							System.out.println("setup not return");
+							System.err.println("Session error");
 						} else {
 							doPlay();
 						}
@@ -232,17 +223,13 @@ public class RTSPClient extends Thread implements IEvent {
 						break;
 					}
 				}
-				
-				try {
-					Thread.sleep(2000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+
+				if (!shutdown.get()) {
+					select();
 				}
-				
-				select();
 
 				try {
-					Thread.sleep(2000);
+					Thread.sleep(1000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -255,48 +242,41 @@ public class RTSPClient extends Thread implements IEvent {
 
 	public void handle(byte[] msg) {
 		String tmp = new String(msg);
-		System.out.println("return msg: \n" + tmp);
+		System.out.println("Server >>>>\n" + tmp);
 
 		if (tmp.startsWith(RTSP_OK)) {
 			switch (sysStatus) {
 			case init:
 				sysStatus = Status.options;
-				System.out.println("option ok");
 				break;
 			case options:
 				sysStatus = Status.describe;
 				trackInfo = tmp.substring(tmp.indexOf("trackID"));
-				System.out.println("describe ok");
 				break;
 			case describe:
 				sessionId = tmp.substring(tmp.indexOf("Session: ") + 9,
 						tmp.indexOf(";"));
 				if (sessionId != null && sessionId.length() > 0) {
 					sysStatus = Status.setup;
-					System.out.println("setup ok");
 				}
 				break;
 			case setup:
 				sysStatus = Status.play;
-				System.out.println("play ok");
 				break;
 			case play:
 				sysStatus = Status.pause;
-				System.out.println("pause ok");
 				break;
 			case pause:
 				sysStatus = Status.teardown;
-				System.out.println("teardown ok");
 				break;
 			case teardown:
 				sysStatus = Status.exit;
-				System.out.println("exit ...");
 			default:
 				break;
 			}
 			isSent = false;
 		} else {
-			System.out.println("return error" + tmp);
+			System.err.println("Server error: " + tmp);
 		}
 	}
 
@@ -305,39 +285,40 @@ public class RTSPClient extends Thread implements IEvent {
 		if (isConnected()) {
 			return;
 		}
-		socketChannel.finishConnect();
-		while (!socketChannel.isConnected()) {
-			try {
-				Thread.sleep(300);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+
+		do {
 			socketChannel.finishConnect();
-		}
+			if (!socketChannel.isConnected()) {
+				try {
+					Thread.sleep(1 * 1000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		} while (!socketChannel.isConnected());
 	}
 
 	private void doTeardown() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("TEARDOWN ");
-		sb.append(this.address);
-		//sb.append("/");
+		sb.append(this.rtspAddress);
 		sb.append(VERSION);
 		sb.append("Cseq: ");
 		sb.append(seq++);
 		sb.append("\r\n");
-		sb.append("User-Agent: RealMedia Player HelixDNAClient/10.0.0.11279 (win32)\r\n");
+		sb.append("User-Agent: VLC\r\n");
 		sb.append("Session: ");
 		sb.append(sessionId);
 		sb.append("\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
 	private void doPlay() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("PLAY ");
-		sb.append(this.address);
+		sb.append(this.rtspAddress);
 		sb.append(VERSION);
 		sb.append("Session: ");
 		sb.append(sessionId);
@@ -346,14 +327,14 @@ public class RTSPClient extends Thread implements IEvent {
 		sb.append(seq++);
 		sb.append("\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
 	private void doSetup() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("SETUP ");
-		sb.append(this.address);
+		sb.append(this.rtspAddress);
 		sb.append("/");
 		sb.append(trackInfo);
 		sb.append(VERSION);
@@ -362,40 +343,41 @@ public class RTSPClient extends Thread implements IEvent {
 		sb.append("\r\n");
 		sb.append("Transport: RTP/AVP;UNICAST;client_port=16264-16265;mode=play\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
 	private void doOption() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("OPTIONS ");
-		sb.append(this.address.substring(0, address.lastIndexOf("/")));
+		sb.append(this.rtspAddress.substring(0,
+				this.rtspAddress.lastIndexOf("/")));
 		sb.append(VERSION);
 		sb.append("Cseq: ");
 		sb.append(seq++);
 		sb.append("\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
 	private void doDescribe() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("DESCRIBE ");
-		sb.append(this.address);
+		sb.append(this.rtspAddress);
 		sb.append(VERSION);
 		sb.append("Cseq: ");
 		sb.append(seq++);
 		sb.append("\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
 	private void doPause() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("PAUSE ");
-		sb.append(this.address);
+		sb.append(this.rtspAddress);
 		sb.append("/");
 		sb.append(VERSION);
 		sb.append("Cseq: ");
@@ -405,7 +387,7 @@ public class RTSPClient extends Thread implements IEvent {
 		sb.append(sessionId);
 		sb.append("\r\n");
 		sb.append("\r\n");
-		System.out.println(sb.toString());
+		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
 	}
 
@@ -428,20 +410,14 @@ public class RTSPClient extends Thread implements IEvent {
 				e.printStackTrace();
 			}
 		} else {
-			System.out.println("Channel is null or disconnected");
+			System.err.println("Client not connected");
 		}
-	}
-
-	@Override
-	public void error(Exception e) {
-		e.printStackTrace();
 	}
 
 	public static void main(String[] args) {
 		try {
 			RTSPClient client = new RTSPClient(new InetSocketAddress(
-					"192.168.2.191", 554), new InetSocketAddress(
-					"192.168.2.50", 0),
+					"192.168.2.191", 554),
 					"rtsp://192.168.2.191:554/user=admin&password=admin&channel=1&stream=0.sdp");
 			client.start();
 		} catch (Exception e) {

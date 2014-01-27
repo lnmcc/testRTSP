@@ -4,16 +4,9 @@ import java.io.IOException;
 import java.nio.channels.SelectionKey;
 
 public interface IEvent {
+	void connect(SelectionKey key) throws IOException;
 
-		/**
-		 * @param key
-		 * @throws IOException
-		 */
-		void connect(SelectionKey key) throws IOException;
-		
-		void read(SelectionKey key) throws IOException;
-		
-		void write() throws IOException;
-		
-		void error(Exception e);
+	void read(SelectionKey key) throws IOException;
+
+	void write() throws IOException;
 }
