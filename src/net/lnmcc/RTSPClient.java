@@ -64,7 +64,6 @@ public class RTSPClient extends Thread implements IEvent {
 			socketChannel = SocketChannel.open();
 			socketChannel.socket().setSoTimeout(50000);
 			socketChannel.configureBlocking(false);
-			socketChannel.socket().bind(null);
 			socketChannel.connect(remoteAddress);
 			socketChannel.register(selector, SelectionKey.OP_CONNECT
 					| SelectionKey.OP_READ | SelectionKey.OP_WRITE, this);
@@ -304,6 +303,30 @@ public class RTSPClient extends Thread implements IEvent {
 		} while (!socketChannel.isConnected());
 	}
 
+
+	@Override
+	public void read(SelectionKey key) throws IOException {
+		final byte[] msg = receive();
+		if (msg != null) {
+			handle(msg);
+		} else {
+			key.cancel();
+		}
+	}
+
+	@Override
+	public void write() throws IOException {
+		if (isConnected()) {
+			try {
+				socketChannel.write(sendBuf);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else {
+			System.err.println("Client not connected");
+		}
+	}
+	
 	private void TeardownCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("TEARDOWN ");
@@ -395,29 +418,6 @@ public class RTSPClient extends Thread implements IEvent {
 		sb.append("\r\n");
 		System.out.println("Client >>>>\n" + sb.toString());
 		send(sb.toString().getBytes());
-	}
-
-	@Override
-	public void read(SelectionKey key) throws IOException {
-		final byte[] msg = receive();
-		if (msg != null) {
-			handle(msg);
-		} else {
-			key.cancel();
-		}
-	}
-
-	@Override
-	public void write() throws IOException {
-		if (isConnected()) {
-			try {
-				socketChannel.write(sendBuf);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		} else {
-			System.err.println("Client not connected");
-		}
 	}
 
 	public static void main(String[] args) {
