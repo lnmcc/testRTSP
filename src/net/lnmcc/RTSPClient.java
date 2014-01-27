@@ -21,21 +21,20 @@ public class RTSPClient extends Thread implements IEvent {
 
 	private final ByteBuffer sendBuf;
 	private final ByteBuffer receiveBuf;
-
 	private static final int BUFFER_SIZE = 8129;
 
 	private Selector selector;
 	private String rtspAddress;
 	private Status sysStatus;
 	private String sessionId;
+	private String trackInfo;
 
 	private AtomicBoolean shutdown;
 	private int seq = 1;
 	private boolean isSent;
-	private String trackInfo;
 
 	private enum Status {
-		init, options, describe, setup, play, pause, teardown, exit
+		init, options, describe, setup, play, pause, teardown, error, exit
 	}
 
 	public RTSPClient(InetSocketAddress remoteAddress, String rtspAddress) {
@@ -54,7 +53,7 @@ public class RTSPClient extends Thread implements IEvent {
 		}
 
 		startup();
-		
+
 		sysStatus = Status.init;
 		shutdown = new AtomicBoolean(false);
 		isSent = false;
@@ -204,11 +203,7 @@ public class RTSPClient extends Thread implements IEvent {
 						SetupCmd();
 						break;
 					case setup:
-						if (sessionId == null || sessionId.length() <= 0) {
-							System.err.println("Session error");
-						} else {
-							PlayCmd();
-						}
+						PlayCmd();
 						break;
 					case play:
 						PauseCmd();
@@ -219,6 +214,9 @@ public class RTSPClient extends Thread implements IEvent {
 					case teardown:
 						shutdown.set(true);
 						break;
+					case error:
+						System.err.println("Something error, Client will shutdown ...");
+						shutdown.set(true);
 					default:
 						break;
 					}
@@ -250,14 +248,21 @@ public class RTSPClient extends Thread implements IEvent {
 				sysStatus = Status.options;
 				break;
 			case options:
-				sysStatus = Status.describe;
 				trackInfo = tmp.substring(tmp.indexOf("trackID"));
+				if (trackInfo != null || trackInfo.length() > 0) {
+					sysStatus = Status.describe;
+				} else {
+					sysStatus = Status.error;
+				}
 				break;
 			case describe:
 				sessionId = tmp.substring(tmp.indexOf("Session: ") + 9,
 						tmp.indexOf(";"));
 				if (sessionId != null && sessionId.length() > 0) {
 					sysStatus = Status.setup;
+				} else {
+					sysStatus = Status.error;
+					System.err.println("SessionId error");
 				}
 				break;
 			case setup:
@@ -276,6 +281,7 @@ public class RTSPClient extends Thread implements IEvent {
 			}
 			isSent = false;
 		} else {
+			sysStatus = Status.error;
 			System.err.println("Server error: " + tmp);
 		}
 	}
