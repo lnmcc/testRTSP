@@ -35,7 +35,7 @@ public class RTSPClient extends Thread implements IEvent {
 	private String trackInfo;
 
 	private enum Status {
-		init, options, describe, setup, play, pause, teardown
+		init, options, describe, setup, play, pause, teardown, exit
 	}
 
 	public RTSPClient(InetSocketAddress remoteAddress,
@@ -71,10 +71,10 @@ public class RTSPClient extends Thread implements IEvent {
 			if (socketChannel.connect(remoteAddress)) {
 				System.out.println("Begin to connect: " + remoteAddress);
 			}
-			
+
 			socketChannel.register(selector, SelectionKey.OP_CONNECT
 					| SelectionKey.OP_READ | SelectionKey.OP_WRITE, this);
-			
+
 			System.out.println("Open succeed");
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -156,6 +156,7 @@ public class RTSPClient extends Thread implements IEvent {
 					.iterator();
 			while (iter.hasNext()) {
 				final SelectionKey sk = iter.next();
+
 				iter.remove();
 				if (!sk.isValid()) {
 					continue;
@@ -168,7 +169,7 @@ public class RTSPClient extends Thread implements IEvent {
 					} else if (sk.isReadable()) {
 						handler.read(sk);
 					} else {
-						System.out.print("handle event error");
+						System.out.println("Unknown selectedKeys");
 					}
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -212,7 +213,7 @@ public class RTSPClient extends Thread implements IEvent {
 						doSetup();
 						break;
 					case setup:
-						if (sessionId == null && sessionId.length() > 0) {
+						if (sessionId == null || sessionId.length() <= 0) {
 							System.out.println("setup not return");
 						} else {
 							doPlay();
@@ -224,15 +225,24 @@ public class RTSPClient extends Thread implements IEvent {
 					case pause:
 						doTeardown();
 						break;
+					case teardown:
+						shutdown.set(true);
+						break;
 					default:
 						break;
 					}
-				} 
-
+				}
+				
+				try {
+					Thread.sleep(2000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				
 				select();
 
 				try {
-					Thread.sleep(1000);
+					Thread.sleep(2000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -256,7 +266,7 @@ public class RTSPClient extends Thread implements IEvent {
 			case options:
 				sysStatus = Status.describe;
 				trackInfo = tmp.substring(tmp.indexOf("trackID"));
-				System.out.println("describ ok");
+				System.out.println("describe ok");
 				break;
 			case describe:
 				sessionId = tmp.substring(tmp.indexOf("Session: ") + 9,
@@ -279,8 +289,8 @@ public class RTSPClient extends Thread implements IEvent {
 				System.out.println("teardown ok");
 				break;
 			case teardown:
-				sysStatus = Status.init;
-				System.out.println("exit start");
+				sysStatus = Status.exit;
+				System.out.println("exit ...");
 			default:
 				break;
 			}
@@ -305,98 +315,99 @@ public class RTSPClient extends Thread implements IEvent {
 			socketChannel.finishConnect();
 		}
 	}
-	
-	 private void doTeardown() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("TEARDOWN ");
-	        sb.append(this.address);
-	        sb.append("/");
-	        sb.append(VERSION);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("User-Agent: RealMedia Player HelixDNAClient/10.0.0.11279 (win32)\r\n");
-	        sb.append("Session: ");
-	        sb.append(sessionId);
-	        sb.append("\r\n");
-	        send(sb.toString().getBytes());
-	        System.out.println(sb.toString());
-	    }
 
-	    private void doPlay() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("PLAY ");
-	        sb.append(this.address);
-	        sb.append(VERSION);
-	        sb.append("Session: ");
-	        sb.append(sessionId);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("\r\n");
-	        System.out.println(sb.toString());
-	        send(sb.toString().getBytes());
+	private void doTeardown() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("TEARDOWN ");
+		sb.append(this.address);
+		//sb.append("/");
+		sb.append(VERSION);
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("User-Agent: RealMedia Player HelixDNAClient/10.0.0.11279 (win32)\r\n");
+		sb.append("Session: ");
+		sb.append(sessionId);
+		sb.append("\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
-	    }
+	private void doPlay() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("PLAY ");
+		sb.append(this.address);
+		sb.append(VERSION);
+		sb.append("Session: ");
+		sb.append(sessionId);
+		sb.append("\r\n");
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
-	    private void doSetup() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("SETUP ");
-	        sb.append(this.address);
-	        sb.append("/");
-	        sb.append(trackInfo);
-	        sb.append(VERSION);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("Transport: RTP/AVP;UNICAST;client_port=16264-16265;mode=play\r\n");
-	        sb.append("\r\n");
-	        System.out.println(sb.toString());
-	        send(sb.toString().getBytes());
-	    }
+	private void doSetup() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("SETUP ");
+		sb.append(this.address);
+		sb.append("/");
+		sb.append(trackInfo);
+		sb.append(VERSION);
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("Transport: RTP/AVP;UNICAST;client_port=16264-16265;mode=play\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
-	    private void doOption() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("OPTIONS ");
-	        sb.append(this.address.substring(0, address.lastIndexOf("/")));
-	        sb.append(VERSION);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("\r\n");
-	        System.out.println(sb.toString());
-	        send(sb.toString().getBytes());
-	    }
+	private void doOption() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("OPTIONS ");
+		sb.append(this.address.substring(0, address.lastIndexOf("/")));
+		sb.append(VERSION);
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
-	    private void doDescribe() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("DESCRIBE ");
-	        sb.append(this.address);
-	        sb.append(VERSION);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("\r\n");
-	        System.out.println(sb.toString());
-	        send(sb.toString().getBytes());
-	    }
-	    
-	    private void doPause() {
-	        StringBuilder sb = new StringBuilder();
-	        sb.append("PAUSE ");
-	        sb.append(this.address);
-	        sb.append("/");
-	        sb.append(VERSION);
-	        sb.append("Cseq: ");
-	        sb.append(seq++);
-	        sb.append("\r\n");
-	        sb.append("Session: ");
-	        sb.append(sessionId);
-	        sb.append("\r\n");
-	        send(sb.toString().getBytes());
-	        System.out.println(sb.toString());
-	    }
+	private void doDescribe() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("DESCRIBE ");
+		sb.append(this.address);
+		sb.append(VERSION);
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
+	private void doPause() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("PAUSE ");
+		sb.append(this.address);
+		sb.append("/");
+		sb.append(VERSION);
+		sb.append("Cseq: ");
+		sb.append(seq++);
+		sb.append("\r\n");
+		sb.append("Session: ");
+		sb.append(sessionId);
+		sb.append("\r\n");
+		sb.append("\r\n");
+		System.out.println(sb.toString());
+		send(sb.toString().getBytes());
+	}
 
 	@Override
 	public void read(SelectionKey key) throws IOException {
