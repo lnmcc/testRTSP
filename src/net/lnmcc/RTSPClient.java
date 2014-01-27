@@ -195,26 +195,26 @@ public class RTSPClient extends Thread implements IEvent {
 				if (isConnected() && (!isSent)) {
 					switch (sysStatus) {
 					case init:
-						doOption();
+						OptionCmd();
 						break;
 					case options:
-						doDescribe();
+						DescribeCmd();
 						break;
 					case describe:
-						doSetup();
+						SetupCmd();
 						break;
 					case setup:
 						if (sessionId == null || sessionId.length() <= 0) {
 							System.err.println("Session error");
 						} else {
-							doPlay();
+							PlayCmd();
 						}
 						break;
 					case play:
-						doPause();
+						PauseCmd();
 						break;
 					case pause:
-						doTeardown();
+						TeardownCmd();
 						break;
 					case teardown:
 						shutdown.set(true);
@@ -298,7 +298,7 @@ public class RTSPClient extends Thread implements IEvent {
 		} while (!socketChannel.isConnected());
 	}
 
-	private void doTeardown() {
+	private void TeardownCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("TEARDOWN ");
 		sb.append(this.rtspAddress);
@@ -315,7 +315,7 @@ public class RTSPClient extends Thread implements IEvent {
 		send(sb.toString().getBytes());
 	}
 
-	private void doPlay() {
+	private void PlayCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("PLAY ");
 		sb.append(this.rtspAddress);
@@ -331,7 +331,7 @@ public class RTSPClient extends Thread implements IEvent {
 		send(sb.toString().getBytes());
 	}
 
-	private void doSetup() {
+	private void SetupCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("SETUP ");
 		sb.append(this.rtspAddress);
@@ -347,7 +347,7 @@ public class RTSPClient extends Thread implements IEvent {
 		send(sb.toString().getBytes());
 	}
 
-	private void doOption() {
+	private void OptionCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("OPTIONS ");
 		sb.append(this.rtspAddress.substring(0,
@@ -361,7 +361,7 @@ public class RTSPClient extends Thread implements IEvent {
 		send(sb.toString().getBytes());
 	}
 
-	private void doDescribe() {
+	private void DescribeCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("DESCRIBE ");
 		sb.append(this.rtspAddress);
@@ -374,7 +374,7 @@ public class RTSPClient extends Thread implements IEvent {
 		send(sb.toString().getBytes());
 	}
 
-	private void doPause() {
+	private void PauseCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("PAUSE ");
 		sb.append(this.rtspAddress);
