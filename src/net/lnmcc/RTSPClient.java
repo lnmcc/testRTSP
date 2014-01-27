@@ -10,7 +10,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class RTSPClient extends Thread implements IEvent {
+public class RTSPClient extends Thread implements IRTSPEvent {
 
 	private static final String VERSION = " RTSP/1.0\r\n";
 	private static final String RTSP_OK = "RTSP/1.0 200 OK";
@@ -154,10 +154,10 @@ public class RTSPClient extends Thread implements IEvent {
 					continue;
 				}
 
-				final IEvent handler = (IEvent) sk.attachment();
+				final IRTSPEvent handler = (IRTSPEvent) sk.attachment();
 				try {
 					if (sk.isConnectable()) {
-						handler.connect(sk);
+						handler.connect();
 					} else if (sk.isReadable()) {
 						handler.read(sk);
 					}
@@ -286,7 +286,7 @@ public class RTSPClient extends Thread implements IEvent {
 	}
 
 	@Override
-	public void connect(SelectionKey key) throws IOException {
+	public void connect() throws IOException {
 		if (isConnected()) {
 			return;
 		}
