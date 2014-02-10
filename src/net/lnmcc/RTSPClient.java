@@ -21,7 +21,7 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 
 	private final ByteBuffer sendBuf;
 	private final ByteBuffer receiveBuf;
-	private static final int BUFFER_SIZE = 8129;
+	private static final int BUFFER_SIZE = 8192;
 
 	private Selector selector;
 	private String rtspAddress;
