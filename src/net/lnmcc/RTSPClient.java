@@ -1,4 +1,3 @@
-//http://hi.baidu.com/ssyuan/item/128bc7d624a77a876dce3fc5
 package net.lnmcc;
 
 import java.io.IOException;
@@ -52,17 +51,17 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 			}
 		}
 
-		startup();
-
 		sysStatus = Status.init;
 		shutdown = new AtomicBoolean(false);
 		isSent = false;
+
+		startup();
 	}
 
 	public void startup() {
 		try {
 			socketChannel = SocketChannel.open();
-			socketChannel.socket().setSoTimeout(50000);
+			socketChannel.socket().setSoTimeout(5 * 60 * 1000);
 			socketChannel.configureBlocking(false);
 			socketChannel.connect(remoteAddress);
 			socketChannel.register(selector, SelectionKey.OP_CONNECT
@@ -214,7 +213,8 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 						shutdown.set(true);
 						break;
 					case error:
-						System.err.println("Something error, Client will shutdown ...");
+						System.err
+								.println("Something error, Client will shutdown ...");
 						shutdown.set(true);
 					default:
 						break;
@@ -226,7 +226,7 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 				}
 
 				try {
-					Thread.sleep(1000);
+					Thread.sleep(2000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -247,7 +247,14 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 				sysStatus = Status.options;
 				break;
 			case options:
-				trackInfo = tmp.substring(tmp.indexOf("trackID"));
+				if (tmp.indexOf("trackID") != -1) {
+					trackInfo = tmp.substring(tmp.indexOf("streamid"));
+				} else if (tmp.indexOf("streamid") != -1) {
+					trackInfo = tmp.substring(tmp.indexOf("streamid"));
+				} else {
+					System.err.println("trackInfo error");
+				}
+
 				if (trackInfo != null || trackInfo.length() > 0) {
 					sysStatus = Status.describe;
 				} else {
@@ -303,7 +310,6 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 		} while (!socketChannel.isConnected());
 	}
 
-
 	@Override
 	public void read(SelectionKey key) throws IOException {
 		final byte[] msg = receive();
@@ -326,7 +332,7 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 			System.err.println("Client not connected");
 		}
 	}
-	
+
 	private void TeardownCmd() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("TEARDOWN ");
@@ -423,8 +429,7 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 	public static void main(String[] args) {
 		try {
 			RTSPClient client = new RTSPClient(new InetSocketAddress(
-					"192.168.2.191", 554),
-					"rtsp://192.168.2.191:554/user=admin&password=admin&channel=1&stream=0.sdp");
+					"192.168.2.184", 554), "rtsp://192.168.2.184:554/live.h264");
 			client.start();
 		} catch (Exception e) {
 			e.printStackTrace();
