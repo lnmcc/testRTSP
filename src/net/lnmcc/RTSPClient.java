@@ -248,7 +248,7 @@ public class RTSPClient extends Thread implements IRTSPEvent {
 				break;
 			case options:
 				if (tmp.indexOf("trackID") != -1) {
-					trackInfo = tmp.substring(tmp.indexOf("streamid"));
+					trackInfo = tmp.substring(tmp.indexOf("trackID"));
 				} else if (tmp.indexOf("streamid") != -1) {
 					trackInfo = tmp.substring(tmp.indexOf("streamid"));
 				} else {
